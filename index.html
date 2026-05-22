@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>武道カリステニクス — Workout Tracker</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@300;400;500&family=Inter:wght@300;400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --pink: #ffb7c5;
+    --pink-dim: rgba(255,183,197,0.18);
+    --pink-glow: rgba(255,183,197,0.4);
+    --bg: #0d0d1a;
+    --surface: rgba(255,255,255,0.03);
+    --border: rgba(255,255,255,0.07);
+    --text: #ece8f5;
+    --text-dim: rgba(236,232,245,0.4);
+    --text-muted: rgba(236,232,245,0.25);
+  }
+
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Serif JP', Georgia, serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Sakura petals ── */
+  .petal {
+    position: fixed;
+    top: -20px;
+    border-radius: 60% 40% 60% 40% / 50% 60% 40% 50%;
+    background: radial-gradient(circle at 30% 30%, #ffb7c5, #e8829a);
+    pointer-events: none;
+    z-index: 0;
+    animation: sakuraFall linear infinite;
+  }
+
+  @keyframes sakuraFall {
+    0%   { transform: translateY(-20px) rotate(0deg) translateX(0); }
+    25%  { transform: translateY(25vh) rotate(90deg) translateX(30px); }
+    50%  { transform: translateY(50vh) rotate(180deg) translateX(-20px); }
+    75%  { transform: translateY(75vh) rotate(270deg) translateX(25px); }
+    100% { transform: translateY(110vh) rotate(360deg) translateX(0); }
+  }
+
+  /* ── BG grid ── */
+  .bg-grid {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: 0.03;
+    background-image:
+      linear-gradient(#ffb7c5 1px, transparent 1px),
+      linear-gradient(90deg, #ffb7c5 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  /* ── Layout ── */
+  #app {
+    position: relative; z-index: 1;
+    max-width: 680px; margin: 0 auto;
+    padding: 0 16px 80px;
+  }
+
+  /* ── Header ── */
+  .header { text-align: center; padding: 40px 0 24px; animation: fadeIn 0.6s ease; }
+  .header-sub {
+    font-size: 11px; letter-spacing: 8px; color: rgba(255,183,197,0.67);
+    margin-bottom: 8px; font-family: 'Inter', sans-serif;
+  }
+  .header-title {
+    font-size: clamp(24px, 5vw, 32px); font-weight: 300; letter-spacing: 2px;
+    animation: glow 3s ease-in-out infinite; color: var(--text);
+  }
+  .header-quote {
+    font-size: 12px; color: var(--text-dim); margin-top: 6px;
+    font-style: italic; letter-spacing: 1px;
+  }
+  .saved-toast {
+    font-size: 11px; color: var(--pink); margin-top: 8px;
+    letter-spacing: 2px; font-family: 'Inter', sans-serif;
+    opacity: 0; transition: opacity 0.3s;
+  }
+  .saved-toast.show { opacity: 1; }
+
+  @keyframes glow {
+    0%,100% { text-shadow: 0 0 8px rgba(255,183,197,.67); }
+    50%      { text-shadow: 0 0 22px #ffb7c5, 0 0 40px rgba(232,130,154,.4); }
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: none; }
+  }
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  /* ── XP panel ── */
+  .xp-panel {
+    background: rgba(255,183,197,0.06);
+    border: 0.5px solid rgba(255,183,197,0.2);
+    border-radius: 12px; padding: 16px 20px; margin-bottom: 20px;
+    animation: slideUp 0.5s ease;
+  }
+  .xp-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .xp-stat { text-align: right; }
+  .xp-stat-label {
+    font-size: 11px; color: rgba(255,183,197,.53); letter-spacing: 2px;
+    font-family: 'Inter', sans-serif; display: block;
+  }
+  .xp-stat-val { font-size: 22px; font-weight: 400; color: var(--text); }
+  .xp-level-val { font-size: 26px; color: var(--pink); }
+  .xp-bar-row { display: flex; gap: 8px; align-items: center; }
+  .xp-bar-label {
+    font-size: 11px; color: rgba(255,183,197,.53); white-space: nowrap;
+    font-family: 'Inter', sans-serif;
+  }
+
+  /* ── Progress bar ── */
+  .prog-bar-wrap { width: 100%; background: rgba(255,255,255,0.07); border-radius: 4px; height: 8px; overflow: hidden; flex: 1; }
+  .prog-bar-fill { height: 100%; border-radius: 4px; transition: width 0.6s cubic-bezier(.4,0,.2,1); }
+
+  /* ── Tabs ── */
+  .tabs {
+    display: flex; gap: 4px; margin-bottom: 24px;
+    background: rgba(255,255,255,0.04); border-radius: 10px; padding: 4px;
+  }
+  .tab-btn {
+    flex: 1; padding: 10px 0; border: none; border-radius: 8px;
+    cursor: pointer; font-family: 'Noto Serif JP', serif; letter-spacing: 1px;
+    background: transparent; color: rgba(236,232,245,0.45);
+    transition: all 0.2s;
+  }
+  .tab-btn .jp { display: block; font-size: 16px; }
+  .tab-btn .en { display: block; font-size: 10px; font-family: 'Inter', sans-serif; opacity: 0.7; }
+  .tab-btn.active { background: rgba(255,183,197,0.15); color: var(--pink); }
+  .tab-btn:hover:not(.active) { background: rgba(255,255,255,0.05); }
+
+  /* ── Tab sections ── */
+  .section { display: none; animation: slideUp 0.3s ease; }
+  .section.visible { display: block; }
+
+  /* ── Day pills ── */
+  .day-pills {
+    display: flex; gap: 6px; margin-bottom: 20px;
+    overflow-x: auto; padding-bottom: 4px;
+  }
+  .day-pills::-webkit-scrollbar { height: 0; }
+  .day-pill {
+    min-width: 50px; padding: 10px 0; border-radius: 10px;
+    border: 0.5px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.04);
+    cursor: pointer; text-align: center; transition: all 0.2s;
+    position: relative; flex-shrink: 0;
+  }
+  .day-pill .kanji { font-size: 18px; color: rgba(236,232,245,0.5); display: block; }
+  .day-pill .day-en { font-size: 10px; color: rgba(236,232,245,0.3); font-family: 'Inter', sans-serif; display: block; }
+  .day-pill.active { border-color: rgba(255,183,197,0.5); background: rgba(255,183,197,0.18); }
+  .day-pill.active .kanji { color: var(--pink); }
+  .day-pill:hover:not(.active) { background: rgba(255,183,197,0.1); transform: translateY(-2px); }
+  .day-dot {
+    position: absolute; top: 4px; right: 4px;
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--pink); box-shadow: 0 0 6px var(--pink);
+  }
+
+  /* ── Day header ── */
+  .day-header {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 16px;
+  }
+  .day-badge { font-size: 28px; }
+  .day-type-name { font-size: 18px; letter-spacing: 1px; }
+  .day-sub { font-size: 11px; color: var(--text-dim); font-family: 'Inter', sans-serif; letter-spacing: 2px; }
+  .done-tag {
+    margin-left: auto; font-size: 11px; color: var(--pink);
+    border: 0.5px solid rgba(255,183,197,0.4); border-radius: 20px;
+    padding: 4px 12px; font-family: 'Inter', sans-serif; letter-spacing: 2px;
+  }
+
+  /* ── Exercise cards ── */
+  .exercise-list { display: flex; flex-direction: column; gap: 12px; }
+  .exercise-card {
+    background: var(--surface); border: 0.5px solid var(--border);
+    border-radius: 10px; padding: 14px 16px; transition: background 0.2s;
+  }
+  .exercise-card:hover { background: rgba(255,255,255,0.05); }
+  .exercise-top {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 10px;
+  }
+  .exercise-name { font-size: 15px; letter-spacing: 0.5px; }
+  .exercise-sets-label { font-size: 12px; color: rgba(236,232,245,0.35); font-family: 'Inter', sans-serif; }
+  .set-circles { display: flex; gap: 8px; }
+  .set-circle {
+    width: 32px; height: 32px; border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.2);
+    background: transparent; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s; font-size: 14px; color: var(--pink);
+  }
+  .set-circle.done {
+    border-color: var(--pink); background: rgba(255,183,197,0.25);
+    transform: scale(1.1); box-shadow: 0 0 12px var(--pink-glow);
+  }
+
+  /* ── Week grid ── */
+  .week-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+  }
+  .week-card {
+    background: var(--surface); border: 0.5px solid var(--border);
+    border-radius: 12px; padding: 14px 16px; cursor: pointer;
+    transition: all 0.2s; position: relative; overflow: hidden;
+  }
+  .week-card:hover { background: rgba(255,255,255,0.05); transform: translateY(-2px); }
+  .week-card.done { border-color: rgba(255,183,197,0.35); }
+  .week-card.done::before {
+    content: ''; position: absolute; inset: 0;
+    background: rgba(255,183,197,0.04); pointer-events: none;
+  }
+  .week-card-top { display: flex; justify-content: space-between; align-items: flex-start; }
+  .week-kanji { font-size: 28px; color: rgba(236,232,245,0.15); }
+  .week-badge { font-size: 18px; }
+  .week-type { font-size: 14px; margin-top: 4px; letter-spacing: 0.5px; }
+  .week-meta { font-size: 11px; color: rgba(236,232,245,0.3); font-family: 'Inter', sans-serif; margin-top: 2px; }
+  .week-done-label { margin-top: 8px; font-size: 11px; color: var(--pink); font-family: 'Inter', sans-serif; letter-spacing: 2px; }
+
+  /* ── Stats section ── */
+  .weight-card {
+    background: var(--surface); border: 0.5px solid rgba(255,255,255,0.08);
+    border-radius: 12px; padding: 18px; margin-bottom: 16px;
+  }
+  .card-label {
+    font-size: 11px; letter-spacing: 4px; color: rgba(255,183,197,.67);
+    font-family: 'Inter', sans-serif; margin-bottom: 12px; display: block;
+  }
+  .weight-input-row { display: flex; gap: 8px; margin-bottom: 12px; }
+  .weight-input {
+    flex: 1; background: rgba(255,255,255,0.06);
+    border: 0.5px solid rgba(255,255,255,0.12); border-radius: 8px;
+    padding: 10px 14px; color: var(--text); font-family: 'Inter', sans-serif;
+    font-size: 14px; outline: none;
+  }
+  .weight-input::placeholder { color: rgba(236,232,245,0.3); }
+  .weight-input:focus { border-color: rgba(255,183,197,0.4); }
+  .weight-btn {
+    padding: 10px 20px; background: rgba(255,183,197,0.2);
+    border: 0.5px solid rgba(255,183,197,0.4); border-radius: 8px;
+    color: var(--pink); cursor: pointer; font-family: 'Inter', sans-serif;
+    font-size: 14px; letter-spacing: 1px; transition: background 0.2s;
+  }
+  .weight-btn:hover { background: rgba(255,183,197,0.3); }
+  .weight-chart { display: flex; align-items: flex-end; gap: 4px; height: 80px; margin-bottom: 8px; }
+  .weight-bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .weight-bar-val { font-size: 9px; color: rgba(255,183,197,.53); font-family: 'Inter', sans-serif; }
+  .weight-bar {
+    width: 100%; background: rgba(255,183,197,0.2); border-radius: 4px 4px 0 0;
+    transition: height 0.5s;
+  }
+  .weight-bar.latest { background: rgba(255,183,197,0.6); }
+  .weight-footer {
+    display: flex; justify-content: space-between; font-size: 11px;
+    color: rgba(236,232,245,0.3); font-family: 'Inter', sans-serif;
+  }
+  .weight-gain-label {
+    font-size: 10px; color: rgba(255,183,197,.47); font-family: 'Inter', sans-serif;
+    margin-top: 4px; text-align: right;
+  }
+  .weight-empty { font-size: 13px; color: var(--text-muted); text-align: center; padding: 16px 0; font-family: 'Inter', sans-serif; }
+
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+  .stat-card {
+    background: var(--surface); border: 0.5px solid var(--border);
+    border-radius: 12px; padding: 14px 16px; text-align: center;
+  }
+  .stat-val { font-size: 22px; font-weight: 400; }
+  .stat-jp { font-size: 14px; letter-spacing: 1px; margin-top: 2px; }
+  .stat-en { font-size: 10px; color: rgba(236,232,245,0.3); font-family: 'Inter', sans-serif; }
+
+  .level-card {
+    background: var(--surface); border: 0.5px solid var(--border);
+    border-radius: 12px; padding: 16px 18px;
+  }
+  .level-bar-labels {
+    display: flex; justify-content: space-between; margin-top: 6px;
+    font-size: 11px; color: rgba(236,232,245,0.3); font-family: 'Inter', sans-serif;
+  }
+  .level-hint {
+    margin-top: 14px; font-size: 12px; color: rgba(236,232,245,.35);
+    font-family: 'Inter', sans-serif; text-align: center; letter-spacing: 1px;
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+<div id="petals"></div>
+
+<div id="app">
+  <div class="header">
+    <div class="header-sub">修行トラッカー</div>
+    <h1 class="header-title">武道カリステニクス</h1>
+    <div class="header-quote" id="quote"></div>
+    <div class="saved-toast" id="savedToast">保存済み ✓</div>
+  </div>
+
+  <!-- XP Panel -->
+  <div class="xp-panel">
+    <div class="xp-row">
+      <div>
+        <span class="xp-stat-label">レベル</span>
+        <span class="xp-level-val" id="levelVal">1</span>
+      </div>
+      <div class="xp-stat">
+        <span class="xp-stat-label">修練日数</span>
+        <span class="xp-stat-val"><span id="doneCount">0</span> <span style="font-size:13px;opacity:.4">/ 28</span></span>
+      </div>
+      <div class="xp-stat">
+        <span class="xp-stat-label">連続</span>
+        <span class="xp-stat-val"><span id="streakVal">0</span> <span style="font-size:13px;opacity:.4">days</span></span>
+      </div>
+    </div>
+    <div class="xp-bar-row">
+      <div class="prog-bar-wrap">
+        <div class="prog-bar-fill" id="xpBarFill" style="background: linear-gradient(90deg, rgba(255,183,197,.6), #ffb7c5); width:0%"></div>
+      </div>
+      <span class="xp-bar-label" id="xpLabel">0/300 XP</span>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('today')">
+      <span class="jp">今日</span><span class="en">Today</span>
+    </button>
+    <button class="tab-btn" onclick="switchTab('week')">
+      <span class="jp">週間</span><span class="en">Week</span>
+    </button>
+    <button class="tab-btn" onclick="switchTab('stats')">
+      <span class="jp">統計</span><span class="en">Stats</span>
+    </button>
+  </div>
+
+  <!-- TODAY -->
+  <div class="section visible" id="tab-today">
+    <div class="day-pills" id="dayPills"></div>
+    <div class="day-header" id="dayHeader"></div>
+    <div class="exercise-list" id="exerciseList"></div>
+  </div>
+
+  <!-- WEEK -->
+  <div class="section" id="tab-week">
+    <div class="week-grid" id="weekGrid"></div>
+  </div>
+
+  <!-- STATS -->
+  <div class="section" id="tab-stats">
+    <div class="weight-card">
+      <span class="card-label">体重記録</span>
+      <div class="weight-input-row">
+        <input class="weight-input" type="number" id="weightInput" placeholder="Enter weight (kg)" min="30" max="200" step="0.1"/>
+        <button class="weight-btn" onclick="addWeight()">記録</button>
+      </div>
+      <div id="weightDisplay"></div>
+    </div>
+    <div class="stats-grid" id="statsGrid"></div>
+    <div class="level-card">
+      <span class="card-label">次のレベルまで</span>
+      <div class="prog-bar-wrap">
+        <div class="prog-bar-fill" id="levelBarFill" style="background: linear-gradient(90deg, rgba(255,183,197,.6), #ffb7c5); width:0%"></div>
+      </div>
+      <div class="level-bar-labels">
+        <span id="lvLeft">Lv 1</span>
+        <span id="lvMid">300 XP to next level</span>
+        <span id="lvRight">Lv 2</span>
+      </div>
+      <div class="level-hint">Complete a full day to earn 100 XP</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const PLAN = {
+  Mon: { type:"Push", badge:"推進", color:"#e05c5c", exercises:[
+    {name:"Push-ups",sets:3,reps:10},
+    {name:"Pike push-ups",sets:3,reps:8},
+    {name:"Tricep dips (chair)",sets:3,reps:8},
+    {name:"Diamond push-ups",sets:2,reps:6},
+  ]},
+  Tue: { type:"Pull + Core", badge:"引力", color:"#5c8fe0", exercises:[
+    {name:"Towel rows (door handle)",sets:3,reps:8},
+    {name:"Door frame rows",sets:3,reps:8},
+    {name:"Plank hold",sets:3,reps:"30s"},
+    {name:"Hollow body hold",sets:3,reps:"20s"},
+  ]},
+  Wed: { type:"Active Rest", badge:"休息", color:"#7a7a9a", exercises:[
+    {name:"Light walk / stretch",sets:1,reps:"15min"},
+    {name:"Hip flexor stretch",sets:2,reps:"40s"},
+    {name:"Wrist circles",sets:2,reps:"30s"},
+  ]},
+  Thu: { type:"Legs", badge:"下肢", color:"#5cb87a", exercises:[
+    {name:"Squats",sets:3,reps:15},
+    {name:"Reverse lunges",sets:3,reps:10},
+    {name:"Glute bridges",sets:3,reps:12},
+    {name:"Calf raises",sets:3,reps:15},
+  ]},
+  Fri: { type:"Full Body", badge:"全身", color:"#d4a017", exercises:[
+    {name:"Burpees",sets:3,reps:8},
+    {name:"Push-up to Downdog",sets:3,reps:8},
+    {name:"Jump squats",sets:3,reps:10},
+    {name:"Mountain climbers",sets:2,reps:20},
+  ]},
+  Sat: { type:"Core + Balance", badge:"均衡", color:"#9b59b6", exercises:[
+    {name:"Dead bug",sets:3,reps:10},
+    {name:"Side plank",sets:2,reps:"25s"},
+    {name:"Single-leg deadlift",sets:3,reps:8},
+    {name:"Superman hold",sets:3,reps:"15s"},
+  ]},
+  Sun: { type:"Full Rest", badge:"完休", color:"#555577", exercises:[
+    {name:"Complete rest",sets:0,reps:"—"},
+    {name:"Sleep 7–8 hrs",sets:0,reps:"priority"},
+  ]},
+};
+const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const KANJI = {Mon:"月",Tue:"火",Wed:"水",Thu:"木",Fri:"金",Sat:"土",Sun:"日"};
+const QUOTES = [
+  "限界突破 — Break your limits",
+  "努力は必ず報われる — Effort always pays off",
+  "継続は力なり — Persistence is power",
+  "自分を超えろ — Surpass yourself",
+  "強くなれ — Become stronger",
+];
+
+// State
+let state = {
+  activeDay: todayKey(),
+  completedSets: {},
+  completedDays: {},
+  weight: [],
+  totalXp: 0,
+  streak: 0,
+};
+
+function todayKey() {
+  const d = new Date().getDay();
+  return DAYS[d === 0 ? 6 : d - 1];
+}
+
+// ── Storage ──
+const LS = {
+  save() {
+    try {
+      localStorage.setItem("wt_v2", JSON.stringify({
+        completedSets: state.completedSets,
+        completedDays: state.completedDays,
+        weight: state.weight,
+        totalXp: state.totalXp,
+        streak: state.streak,
+      }));
+      showToast();
+    } catch(e) {}
+  },
+  load() {
+    try {
+      const d = localStorage.getItem("wt_v2");
+      if (d) {
+        const p = JSON.parse(d);
+        state.completedSets = p.completedSets || {};
+        state.completedDays = p.completedDays || {};
+        state.weight = p.weight || [];
+        state.totalXp = p.totalXp || 0;
+        state.streak = p.streak || 0;
+      }
+    } catch(e) {}
+  }
+};
+
+function showToast() {
+  const t = document.getElementById("savedToast");
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 1500);
+}
+
+// ── Sakura petals ──
+function spawnPetals() {
+  const container = document.getElementById("petals");
+  for (let i = 0; i < 18; i++) {
+    const p = document.createElement("div");
+    p.className = "petal";
+    const size = 10 + Math.random() * 14;
+    p.style.cssText = `
+      left:${Math.random()*100}%;
+      width:${size}px; height:${size}px;
+      opacity:${0.15 + Math.random()*0.35};
+      animation-duration:${6 + Math.random()*6}s;
+      animation-delay:${Math.random()*8}s;
+    `;
+    container.appendChild(p);
+  }
+}
+
+// ── Tab switching ──
+let currentTab = "today";
+function switchTab(id) {
+  document.querySelectorAll(".section").forEach(s => s.classList.remove("visible"));
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+  document.getElementById("tab-" + id).classList.add("visible");
+  document.querySelectorAll(".tab-btn")[["today","week","stats"].indexOf(id)].classList.add("active");
+  currentTab = id;
+  if (id === "week") renderWeek();
+  if (id === "stats") renderStats();
+}
+
+// ── XP helpers ──
+function getLevel() { return Math.floor(state.totalXp / 300) + 1; }
+function getXpInLevel() { return state.totalXp % 300; }
+
+function updateXpPanel() {
+  const lvl = getLevel(), xpIn = getXpInLevel();
+  document.getElementById("levelVal").textContent = lvl;
+  document.getElementById("doneCount").textContent = Object.keys(state.completedDays).length;
+  document.getElementById("streakVal").textContent = state.streak;
+  document.getElementById("xpBarFill").style.width = Math.round((xpIn/300)*100) + "%";
+  document.getElementById("xpLabel").textContent = `${xpIn}/300 XP`;
+}
+
+// ── Today tab ──
+function renderDayPills() {
+  const container = document.getElementById("dayPills");
+  container.innerHTML = "";
+  DAYS.forEach(d => {
+    const btn = document.createElement("button");
+    btn.className = "day-pill" + (d === state.activeDay ? " active" : "");
+    btn.innerHTML = `<span class="kanji">${KANJI[d]}</span><span class="day-en">${d}</span>`;
+    if (state.completedDays[d]) {
+      const dot = document.createElement("div");
+      dot.className = "day-dot";
+      btn.appendChild(dot);
+    }
+    btn.onclick = () => { state.activeDay = d; renderToday(); };
+    container.appendChild(btn);
+  });
+}
+
+function renderDayHeader() {
+  const d = state.activeDay;
+  const wd = PLAN[d];
+  const header = document.getElementById("dayHeader");
+  const isDone = !!state.completedDays[d];
+  header.innerHTML = `
+    <div class="day-badge" style="color:${wd.color}">${wd.badge}</div>
+    <div>
+      <div class="day-type-name">${wd.type}</div>
+      <div class="day-sub">${d === todayKey() ? "本日の修行" : d}</div>
+    </div>
+    ${isDone ? `<div class="done-tag">完了 ✓</div>` : ""}
+  `;
+}
+
+function renderExercises() {
+  const d = state.activeDay;
+  const list = document.getElementById("exerciseList");
+  list.innerHTML = "";
+  PLAN[d].exercises.forEach((ex, ei) => {
+    const card = document.createElement("div");
+    card.className = "exercise-card";
+    const setsLabel = ex.sets > 0 ? `${ex.sets} sets × ${ex.reps}` : ex.reps;
+    let circlesHTML = "";
+    if (ex.sets > 0) {
+      circlesHTML = '<div class="set-circles">';
+      for (let si = 0; si < ex.sets; si++) {
+        const key = `${d}_${ei}_${si}`;
+        const done = !!state.completedSets[key];
+        circlesHTML += `<button class="set-circle${done?" done":""}" onclick="toggleSet('${d}',${ei},${si})">${done?"✓":""}</button>`;
+      }
+      circlesHTML += "</div>";
+    }
+    card.innerHTML = `
+      <div class="exercise-top">
+        <span class="exercise-name">${ex.name}</span>
+        <span class="exercise-sets-label">${setsLabel}</span>
+      </div>
+      ${circlesHTML}
+    `;
+    list.appendChild(card);
+  });
+}
+
+function renderToday() {
+  renderDayPills();
+  renderDayHeader();
+  renderExercises();
+}
+
+function toggleSet(day, ei, si) {
+  const key = `${day}_${ei}_${si}`;
+  state.completedSets[key] = !state.completedSets[key];
+  const dayEx = PLAN[day].exercises;
+  const allDone = dayEx.every((ex, i) =>
+    ex.sets === 0 || Array.from({length:ex.sets},(_,s)=>state.completedSets[`${day}_${i}_${s}`]).every(Boolean)
+  );
+  if (allDone && !state.completedDays[day]) {
+    state.completedDays[day] = new Date().toLocaleDateString();
+    state.totalXp += 100;
+    state.streak += 1;
+    updateXpPanel();
+  }
+  LS.save();
+  renderExercises();
+  renderDayPills();
+  renderDayHeader();
+  updateXpPanel();
+}
+
+// ── Week tab ──
+function renderWeek() {
+  const grid = document.getElementById("weekGrid");
+  grid.innerHTML = "";
+  DAYS.forEach(d => {
+    const wd = PLAN[d];
+    const isDone = !!state.completedDays[d];
+    const card = document.createElement("div");
+    card.className = "week-card" + (isDone ? " done" : "");
+    card.innerHTML = `
+      <div class="week-card-top">
+        <div class="week-kanji">${KANJI[d]}</div>
+        <div class="week-badge" style="color:${wd.color}">${wd.badge}</div>
+      </div>
+      <div class="week-type">${wd.type}</div>
+      <div class="week-meta">${d} · ${wd.exercises.length} exercises</div>
+      ${isDone ? `<div class="week-done-label">完了 ✓ ${state.completedDays[d]}</div>` : ""}
+    `;
+    card.onclick = () => { state.activeDay = d; switchTab("today"); };
+    grid.appendChild(card);
+  });
+}
+
+// ── Stats tab ──
+function renderStats() {
+  renderWeightDisplay();
+  renderStatCards();
+  renderLevelBar();
+}
+
+function renderWeightDisplay() {
+  const container = document.getElementById("weightDisplay");
+  if (state.weight.length === 0) {
+    container.innerHTML = `<div class="weight-empty">体重を記録してください</div>`;
+    return;
+  }
+  const recent = state.weight.slice(-10);
+  const vals = recent.map(w => w.val);
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const range = max - min || 1;
+  let bars = "";
+  recent.forEach((w, i) => {
+    const h = Math.round(20 + ((w.val - min) / range) * 55);
+    const isLatest = i === recent.length - 1;
+    bars += `
+      <div class="weight-bar-col">
+        <div class="weight-bar-val">${w.val}</div>
+        <div class="weight-bar${isLatest?" latest":""}" style="height:${h}px"></div>
+      </div>
+    `;
+  });
+  const latest = state.weight[state.weight.length - 1].val;
+  const start = state.weight[0].val;
+  const gained = Math.max(0, latest - 55);
+  const gainedPct = Math.min(100, Math.round((gained / 10) * 100));
+  container.innerHTML = `
+    <div class="weight-chart">${bars}</div>
+    <div class="weight-footer">
+      <span>Start: ${start} kg</span>
+      <span>Latest: ${latest} kg</span>
+      <span>Goal: 65 kg</span>
+    </div>
+    <div style="margin-top:10px">
+      <div class="prog-bar-wrap">
+        <div class="prog-bar-fill" style="width:${gainedPct}%;background:linear-gradient(90deg,rgba(255,183,197,.6),#ffb7c5)"></div>
+      </div>
+      <div class="weight-gain-label">${gained.toFixed(1)} / 10 kg gained</div>
+    </div>
+  `;
+}
+
+function renderStatCards() {
+  const grid = document.getElementById("statsGrid");
+  const lvl = getLevel();
+  const items = [
+    ["修練完了","Workouts done", Object.keys(state.completedDays).length, "#ffb7c5"],
+    ["連続日数","Day streak", state.streak, "#9b59b6"],
+    ["経験値","Total XP", state.totalXp, "#d4a017"],
+    ["レベル","Level", lvl, "#5c8fe0"],
+  ];
+  grid.innerHTML = items.map(([jp,en,val,col]) => `
+    <div class="stat-card">
+      <div class="stat-val" style="color:${col}">${val}</div>
+      <div class="stat-jp">${jp}</div>
+      <div class="stat-en">${en}</div>
+    </div>
+  `).join("");
+}
+
+function renderLevelBar() {
+  const lvl = getLevel(), xpIn = getXpInLevel();
+  document.getElementById("levelBarFill").style.width = Math.round((xpIn/300)*100) + "%";
+  document.getElementById("lvLeft").textContent = `Lv ${lvl}`;
+  document.getElementById("lvMid").textContent = `${300 - xpIn} XP to next level`;
+  document.getElementById("lvRight").textContent = `Lv ${lvl + 1}`;
+}
+
+function addWeight() {
+  const input = document.getElementById("weightInput");
+  const val = parseFloat(input.value);
+  if (isNaN(val) || val < 30 || val > 200) return;
+  state.weight.push({ val, date: new Date().toLocaleDateString() });
+  if (state.weight.length > 12) state.weight = state.weight.slice(-12);
+  input.value = "";
+  LS.save();
+  renderWeightDisplay();
+}
+
+document.getElementById("weightInput").addEventListener("keydown", e => {
+  if (e.key === "Enter") addWeight();
+});
+
+// ── Init ──
+LS.load();
+spawnPetals();
+document.getElementById("quote").textContent = QUOTES[Math.floor(Math.random() * QUOTES.length)];
+updateXpPanel();
+renderToday();
+</script>
+</body>
+</html>
